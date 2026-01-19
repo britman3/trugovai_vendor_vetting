@@ -1,0 +1,194 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========================
+// User Model
+// ========================
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  name          String?
+  role          UserRole  @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  vendorsCreated      Vendor[]           @relation("VendorCreatedBy")
+  assessmentsCreated  VendorAssessment[] @relation("AssessmentCreatedBy")
+  assessmentsAssessed VendorAssessment[] @relation("AssessmentAssessedBy")
+  assessmentsReviewed VendorAssessment[] @relation("AssessmentReviewedBy")
+}
+
+enum UserRole {
+  USER
+  REVIEWER
+  ADMIN
+}
+
+// ========================
+// Vendor Model
+// ========================
+model Vendor {
+  id            String    @id @default(uuid())
+  name          String    @unique
+  website       String
+  description   String
+  contactName   String?
+  contactEmail  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  createdById   String
+
+  // Relations
+  createdBy     User              @relation("VendorCreatedBy", fields: [createdById], references: [id])
+  products      VendorProduct[]
+  assessments   VendorAssessment[]
+}
+
+// ========================
+// Vendor Product Model
+// ========================
+model VendorProduct {
+  id            String          @id @default(uuid())
+  vendorId      String
+  name          String
+  description   String
+  category      ProductCategory
+  pricingModel  PricingModel
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  // Relations
+  vendor        Vendor            @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  assessments   VendorAssessment[]
+}
+
+enum ProductCategory {
+  Chatbot       @map("Chatbot/Assistant")
+  Coding        @map("Coding/Development")
+  Writing       @map("Writing/Content")
+  ImageGeneration @map("Image Generation")
+  VideoGeneration @map("Video Generation")
+  AudioTranscription @map("Audio/Transcription")
+  DataAnalysis  @map("Data Analysis")
+  Automation
+  Other
+}
+
+enum PricingModel {
+  Free
+  Freemium
+  Subscription
+  PayPerUse     @map("Pay-per-use/API")
+  Enterprise    @map("Enterprise/Custom")
+}
+
+// ========================
+// Vendor Assessment Model
+// ========================
+model VendorAssessment {
+  id                  String            @id @default(uuid())
+  vendorId            String
+  productId           String?
+
+  // Assessment info
+  assessmentType      AssessmentType
+  requestedBy         String
+  requestReason       String
+  department          String?
+
+  // Category scores
+  complianceScore     Int               @default(0)
+  securityScore       Int               @default(0)
+  operationalScore    Int               @default(0)
+  trustScore          Int               @default(0)
+  totalScore          Int               @default(0)
+
+  // Answers stored as JSON
+  complianceAnswers   Json              @default("{}")
+  securityAnswers     Json              @default("{}")
+  operationalAnswers  Json              @default("{}")
+  trustAnswers        Json              @default("{}")
+
+  // Verdict
+  verdict             VendorVerdict     @default(Pending)
+  verdictNotes        String?
+  conditions          String[]          @default([])
+
+  // Workflow
+  status              AssessmentStatus  @default(Draft)
+  assessedById        String?
+  assessedAt          DateTime?
+  reviewedById        String?
+  reviewedAt          DateTime?
+
+  // Self-service
+  vendorToken         String?           @unique
+  vendorTokenExpiresAt DateTime?
+  vendorSubmittedAt   DateTime?
+
+  // Metadata
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  createdById         String
+  expiresAt           DateTime?
+  version             Int               @default(1)
+
+  // Relations
+  vendor              Vendor            @relation(fields: [vendorId], references: [id])
+  product             VendorProduct?    @relation(fields: [productId], references: [id])
+  createdBy           User              @relation("AssessmentCreatedBy", fields: [createdById], references: [id])
+  assessedBy          User?             @relation("AssessmentAssessedBy", fields: [assessedById], references: [id])
+  reviewedBy          User?             @relation("AssessmentReviewedBy", fields: [reviewedById], references: [id])
+  evidenceLinks       EvidenceLink[]
+
+  @@index([vendorId])
+  @@index([status])
+  @@index([verdict])
+  @@index([vendorToken])
+}
+
+enum AssessmentType {
+  NewVendor     @map("New Vendor")
+  Renewal       @map("Renewal/Re-assessment")
+  Expedited     @map("Expedited Review")
+}
+
+enum VendorVerdict {
+  Approved
+  Conditional
+  Rejected
+  Pending       @map("Pending Review")
+}
+
+enum AssessmentStatus {
+  Draft
+  AwaitingVendor  @map("Awaiting Vendor Response")
+  InReview        @map("In Review")
+  AwaitingApproval @map("Awaiting Approval")
+  Complete
+  Expired
+}
+
+// ========================
+// Evidence Link Model
+// ========================
+model EvidenceLink {
+  id            String            @id @default(uuid())
+  assessmentId  String
+  label         String
+  url           String
+  uploadedAt    DateTime          @default(now())
+
+  // Relations
+  assessment    VendorAssessment  @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+}
